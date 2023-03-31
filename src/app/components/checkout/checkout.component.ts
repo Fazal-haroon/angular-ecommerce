@@ -10,6 +10,8 @@ import {Router} from "@angular/router";
 import {Order} from "../../common/order";
 import {OrderItem} from "../../common/order-item";
 import {Purchase} from "../../common/purchase";
+import {environment} from "../../../environments/environment";
+import {PaymentInfo} from "../../common/payment-info";
 
 @Component({
     selector: 'app-checkout',
@@ -32,10 +34,20 @@ export class CheckoutComponent implements OnInit {
 
     storage: Storage = sessionStorage;
 
+    //initialize stripe api
+    stripe = Stripe(environment.stripePublishableKey);
+
+    paymentInfo: PaymentInfo = new PaymentInfo();
+    cardElement: any;
+    displayError: any = "";
+
     constructor(private formBuilder: FormBuilder, private shopFormService: ShopFormService, private cartService: CartService, private checkoutService: CheckoutService, private router: Router) { // Inject our form service
     }
 
     ngOnInit(): void {
+
+        //setup Stripe payment form
+        this.setupStripePaymentForm();
 
         this.reviewCartDetails();
 
@@ -63,16 +75,16 @@ export class CheckoutComponent implements OnInit {
                 country: new FormControl('', [Validators.required])
             }),
             creditCard: this.formBuilder.group({
-                cardType: new FormControl('', [Validators.required]),
+                /*cardType: new FormControl('', [Validators.required]),
                 nameOnCard: new FormControl('', [Validators.required, Validators.minLength(2), ShopValidators.notOnlyWhitespace]),
                 cardNumber: new FormControl('', [Validators.pattern('[0-9]{16}'), Validators.required]),
                 securityCode: new FormControl('', [Validators.pattern('[0-9]{3}'), Validators.required]),
                 expirationMonth: [''],
-                expirationYear: ['']
+                expirationYear: ['']*/
             })
         })
 
-        // populate credit card months
+        /*// populate credit card months
         const startMonth: number = new Date().getMonth() + 1; // Get the current month is 0-based
         console.log("startMonth: " + startMonth);
 
@@ -89,7 +101,7 @@ export class CheckoutComponent implements OnInit {
                 console.log("Retrieved credit card years: " + JSON.stringify(data));
                 this.creditCardYears = data;
             }
-        )
+        )*/
 
         //populate countries
         this.shopFormService.getCountries().subscribe(
@@ -324,5 +336,29 @@ export class CheckoutComponent implements OnInit {
         //navigate back to the products page
         this.router.navigateByUrl("/products")
 
+    }
+
+    setupStripePaymentForm() {
+        //get a handle to stripe elements
+        var elements = this.stripe.elements();
+
+        //create a card element ... and hide the zip-code field
+        this.cardElement = elements.create('card', {hidePostalCode: true})
+
+        //add an instance of card UI component into the 'card-element' div
+        this.cardElement.mount('#card-element');
+
+        //add event binding for the 'change' event on the card element
+        this.cardElement.on('change', (event: any) => {
+            //get a handle to card-errors element
+            this.displayError = document.getElementById('card-element');
+
+            if(event.complete){
+                this.displayError.textContent = "";
+            } else if(event.error){
+                //show validation error to customer
+                this.displayError.textContent = event.error.message;
+            }
+        })
     }
 }
