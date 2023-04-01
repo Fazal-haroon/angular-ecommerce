@@ -164,19 +164,62 @@ export class CheckoutComponent implements OnInit {
         purchase.order = order;
         purchase.orderItems = orderItems;
 
-        //call REST API via the CheckoutService
-        this.checkoutService.placeOrder(purchase).subscribe(
-            {
-                next: response => {
-                    alert(`Your order has been received.\nOrder tracking number: ${response.orderTrackingNumber}`)
-                    // reset cart
-                    this.resetCart();
-                }, //success or happy
-                error: err => {
-                    alert(`There was an error: ${err.message}`)
-                } //error or exception
-            }
-        )
+        //compute payment info
+        this.paymentInfo.amount = this.totalPrice * 100;
+        this.paymentInfo.currency = "USD";
+
+        /*  //call REST API via the CheckoutService
+          this.checkoutService.placeOrder(purchase).subscribe(
+              {
+                  next: response => {
+                      alert(`Your order has been received.\nOrder tracking number: ${response.orderTrackingNumber}`)
+                      // reset cart
+                      this.resetCart();
+                  }, //success or happy
+                  error: err => {
+                      alert(`There was an error: ${err.message}`)
+                  } //error or exception
+              }
+          )
+  */
+
+        //if valid form then
+        //-create payment intent
+        //-confirm card payment
+        //-place order
+        if (!this.checkoutFormGroup.invalid && this.displayError.textContent === "") {
+            this.checkoutService.createPaymentIntent(this.paymentInfo).subscribe(
+                (paymentIntentResponse) => {
+                    this.stripe.confirmCardPayment(paymentIntentResponse.client_secret,
+                        {
+                            payment_method: {
+                                card: this.cardElement
+                            }
+                        }, {handleActions: false}
+                    ).then((result: any) => {
+                        if (result.error) {
+                            //inform the customer there was an error
+                            alert(`There was an error: ${result.error.message}`);
+                        } else {
+                            //call REST API via the CheckoutService
+                            this.checkoutService.placeOrder(purchase).subscribe({
+                                next: (response: any) => {
+                                    alert(`Your order has been received. \nOrder tracking number: ${response.orderTrackingNumber}`);
+                                    //reset cart
+                                    this.resetCart();
+                                },
+                                error: (err: any) => {
+                                    alert(`There was an error: ${err.message}`)
+                                }
+                            });
+                        }
+                    })
+                }
+            )
+        }else {
+            this.checkoutFormGroup.markAllAsTouched();
+            return;
+        }
 
         // console.log(this.checkoutFormGroup.get('customer').value)
         // console.log("The email address is " + this.checkoutFormGroup.get('customer').value.email)
@@ -353,9 +396,9 @@ export class CheckoutComponent implements OnInit {
             //get a handle to card-errors element
             this.displayError = document.getElementById('card-element');
 
-            if(event.complete){
+            if (event.complete) {
                 this.displayError.textContent = "";
-            } else if(event.error){
+            } else if (event.error) {
                 //show validation error to customer
                 this.displayError.textContent = event.error.message;
             }
